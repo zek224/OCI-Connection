@@ -10,20 +10,10 @@
 
 void print_oci_error(OCIError *errhp);
 int read_key_file(char *username, char *password, char *wallet_pw);
+void clean_up(OCISession *usrhp, OCISvcCtx *svchp, OCIServer *srvhp, OCIError *errhp, OCIEnv *envhp);
+int set_environment();
 
 int main() {
-    // Set TNS_ADMIN environment variable
-    if(setenv("TNS_ADMIN", "../wallet", 1) != 0) {
-        perror("Error setting TNS_ADMIN environment variable");
-        return 1;
-    }
-
-    // Set LD_LIBRARY_PATH environment variable
-    if(setenv("LD_LIBRARY_PATH", "../instantclient/", 1) != 0) {
-        perror("Error setting LD_LIBRARY_PATH environment variable");
-        return 1;
-    }
-
     // Initialize OCI environment
     OCIEnv *envhp;
     OCIServer *srvhp;
@@ -32,6 +22,11 @@ int main() {
     OCIStmt *stmthp;
     OCIDefine *defnp;
     OCIError *errhp;
+
+    if(set_environment() != 0) {
+        printf("Error setting environment.\n");
+        return 1;
+    }
 
     sword status;
     status = OCIEnvCreate(&envhp, OCI_DEFAULT, NULL, NULL, NULL, NULL, 0, NULL);
@@ -130,11 +125,7 @@ int main() {
         printf("SQL commands file: %s\n", sql_commands_file);
     }
     if(option == 3) {
-        OCIHandleFree(envhp, OCI_HTYPE_ENV);
-        OCIHandleFree(srvhp, OCI_HTYPE_SERVER);
-        OCIHandleFree(svchp, OCI_HTYPE_SVCCTX);
-        OCIHandleFree(usrhp, OCI_HTYPE_SESSION);
-        OCIHandleFree(errhp, OCI_HTYPE_ERROR);
+        clean_up(usrhp, svchp, srvhp, errhp, envhp);
         printf("Exiting...\n");
         return 0;
     }
@@ -165,7 +156,9 @@ int main() {
     // Execute the statement and fetch rows
     status = OCIStmtExecute(svchp, stmthp, errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
     if(status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+        printf("Error executing SQL statement.\n");
         print_oci_error(errhp);
+        clean_up(usrhp, svchp, srvhp, errhp, envhp);
         return 1;
     }
 
@@ -184,21 +177,15 @@ int main() {
         printf("%d\t%s\n", id, name);
     }
 
-    // Clean up
     OCIHandleFree(stmthp, OCI_HTYPE_STMT);
     OCISessionEnd(svchp, errhp, usrhp, OCI_DEFAULT);
     OCIServerDetach(srvhp, errhp, OCI_DEFAULT);
-
-    // Free handles
-    OCIHandleFree(usrhp, OCI_HTYPE_SESSION);
-    OCIHandleFree(svchp, OCI_HTYPE_SVCCTX);
-    OCIHandleFree(srvhp, OCI_HTYPE_SERVER);
-    OCIHandleFree(errhp, OCI_HTYPE_ERROR);
-    OCIHandleFree(envhp, OCI_HTYPE_ENV);
-
+    clean_up(usrhp, svchp, srvhp, errhp, envhp);
+    printf("Disconnected from Oracle Database.\n");
     return 0;
 }
 
+// Prints OCI error
 void print_oci_error(OCIError *errhp) {
     sb4 errcode = 0;
     text errbuf[512];
@@ -206,6 +193,7 @@ void print_oci_error(OCIError *errhp) {
     printf("Error %d: %s\n", errcode, errbuf);
 }
 
+// Reads Key File into username, password, and wallet_pw
 int read_key_file(char *username, char *password, char *wallet_pw) {
     FILE *key_file = fopen("../key.txt", "r");
     if(!key_file) {
@@ -223,5 +211,29 @@ int read_key_file(char *username, char *password, char *wallet_pw) {
         }
     }
     fclose(key_file);
+    return 0;
+}
+
+// Cleans up OCI handles
+void clean_up(OCISession *usrhp, OCISvcCtx *svchp, OCIServer *srvhp, OCIError *errhp, OCIEnv *envhp) {
+    OCIHandleFree(usrhp, OCI_HTYPE_SESSION);
+    OCIHandleFree(svchp, OCI_HTYPE_SVCCTX);
+    OCIHandleFree(srvhp, OCI_HTYPE_SERVER);
+    OCIHandleFree(errhp, OCI_HTYPE_ERROR);
+    OCIHandleFree(envhp, OCI_HTYPE_ENV);
+}
+
+int set_environment() {
+    // Set TNS_ADMIN environment variable
+    if(setenv("TNS_ADMIN", "../wallet", 1) != 0) {
+        perror("Error setting TNS_ADMIN environment variable");
+        return 1;
+    }
+
+    // Set LD_LIBRARY_PATH environment variable
+    if(setenv("LD_LIBRARY_PATH", "../instantclient/", 1) != 0) {
+        perror("Error setting LD_LIBRARY_PATH environment variable");
+        return 1;
+    }
     return 0;
 }
