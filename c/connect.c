@@ -1,19 +1,25 @@
+// gcc -o connect connect.c -I../instantclient/sdk/include -L../instantclient -lclntsh -Wl,-rpath=../instantclient
+// export LD_LIBRARY_PATH=/home/mint/Desktop/oci/OCI-Connection/instantclient:$LD_LIBRARY_PATH 
+// instant client is in ../instantclient
+// wallet is in ../wallet
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <oci.h>
 
 void print_oci_error(OCIError *errhp);
+int read_key_file(char *username, char *password, char *wallet_pw);
 
 int main() {
     // Set TNS_ADMIN environment variable
-    if (setenv("TNS_ADMIN", "../wallet", 1) != 0) {
+    if(setenv("TNS_ADMIN", "../wallet", 1) != 0) {
         perror("Error setting TNS_ADMIN environment variable");
         return 1;
     }
 
     // Set LD_LIBRARY_PATH environment variable
-    if (setenv("LD_LIBRARY_PATH", "../instantclient/", 1) != 0) {
+    if(setenv("LD_LIBRARY_PATH", "../instantclient/", 1) != 0) {
         perror("Error setting LD_LIBRARY_PATH environment variable");
         return 1;
     }
@@ -29,35 +35,21 @@ int main() {
 
     sword status;
     status = OCIEnvCreate(&envhp, OCI_DEFAULT, NULL, NULL, NULL, NULL, 0, NULL);
-    if (status != OCI_SUCCESS) {
+    if(status != OCI_SUCCESS) {
         printf("OCIEnvCreate failed.\n");
         return 1;
     }
 
     // Read keys from key file
     char username[128], password[128], wallet_pw[128];
-    FILE *key_file = fopen("../key.txt", "r");
-    if (!key_file) {
-        printf("Error opening key file.\n");
-        return 1;
+    if(read_key_file(username, password, wallet_pw) == 0) {
+        printf("Read key file successfully.\n");
+        printf("Username: %s\n", username);
+        // printf("Password: %s\n", password);
+        // printf("Wallet Password: %s\n", wallet_pw);
+    } else {
+        printf("Error reading key file.\n");
     }
-
-    char line[256];
-    while (fgets(line, sizeof(line), key_file)) {
-        if (strncmp(line, "username", 8) == 0) {
-            sscanf(line, "username%*[ ]=%*[ ]%s", username);
-        } else if (strncmp(line, "password", 8) == 0) {
-            sscanf(line, "password%*[ ]=%*[ ]%s", password);
-        } else if (strncmp(line, "wallet_password", 15) == 0) {
-            sscanf(line, "wallet_password%*[ ]=%*[ ]%s", wallet_pw);
-        }
-    }
-    fclose(key_file);
-
-    // print username, password, wallet_pw
-    // printf("username: %s\n", username);
-    // printf("password: %s\n", password);
-    // printf("wallet_pw: %s\n", wallet_pw);
 
     // Allocate handles
     OCIHandleAlloc(envhp, (void **)&errhp, OCI_HTYPE_ERROR, 0, NULL);
@@ -68,7 +60,7 @@ int main() {
     // Attach to server
     // printf("Attaching server...\n");
     status = OCIServerAttach(srvhp, errhp, (text *)"cbdcauto_low", strlen("cbdcauto_low"), OCI_DEFAULT);
-    if (status != OCI_SUCCESS) {
+    if(status != OCI_SUCCESS) {
         print_oci_error(errhp);
         return 1;
     }
@@ -76,7 +68,7 @@ int main() {
     // Set attribute server context
     // printf("Setting attribute server context...\n");
     status = OCIAttrSet(svchp, OCI_HTYPE_SVCCTX, srvhp, 0, OCI_ATTR_SERVER, errhp);
-    if (status != OCI_SUCCESS) {
+    if(status != OCI_SUCCESS) {
         print_oci_error(errhp);
         return 1;
     }
@@ -84,12 +76,12 @@ int main() {
     // Set attribute session context
     // printf("Setting attribute session context...\n");
     status = OCIAttrSet(usrhp, OCI_HTYPE_SESSION, username, strlen(username), OCI_ATTR_USERNAME, errhp);
-    if (status != OCI_SUCCESS) {
+    if(status != OCI_SUCCESS) {
         print_oci_error(errhp);
         return 1;
     }
     status = OCIAttrSet(usrhp, OCI_HTYPE_SESSION, password, strlen(password), OCI_ATTR_PASSWORD, errhp);
-    if (status != OCI_SUCCESS) {
+    if(status != OCI_SUCCESS) {
         print_oci_error(errhp);
         return 1;
     }
@@ -97,25 +89,68 @@ int main() {
     // Log in
     // printf("Logging in...\n");
     status = OCISessionBegin(svchp, errhp, usrhp, OCI_CRED_RDBMS, OCI_DEFAULT);
-    if (status != OCI_SUCCESS) {
+    if(status != OCI_SUCCESS) {
         print_oci_error(errhp);
         return 1;
     }
     status = OCIAttrSet(svchp, OCI_HTYPE_SVCCTX, usrhp, 0, OCI_ATTR_SESSION, errhp);
-    if (status != OCI_SUCCESS) {
+    if(status != OCI_SUCCESS) {
         print_oci_error(errhp);
         return 1;
     }
 
+
+    printf("Connected to Oracle Database.\n");
+    printf("Select an option: \n");
+    printf("1. Enter SQL statement.\n");
+    printf("2. Enter SQL commands file.\n");
+    printf("3. Exit.\n");
+
+    int option;
+    char sql_statement[256];
+    char sql_commands_file[256];
+
+    while(scanf("%d", &option) != 1 || option < 1 || option > 3) {
+        printf("Invalid input. Please enter 1, 2, or 3.\n");
+        while(getchar() != '\n');
+    }
+
+    // if option is 1, take user input for sql statement
+    if(option == 1) {
+        printf("Enter SQL statement (dont add ';'): ");
+        // get user input with spaces into sql_statement
+        scanf(" %[^\n]s", sql_statement);
+        sql_statement[sizeof(sql_statement) - 1] = '\0';  // Add null terminator
+        printf("SQL statement: %s\n", sql_statement);
+    }
+    if(option == 2) {
+        printf("Enter SQL commands file (unimplemented): ");
+        // char sql_commands_file[256];
+        scanf("%s", sql_commands_file);
+        printf("SQL commands file: %s\n", sql_commands_file);
+    }
+    if(option == 3) {
+        OCIHandleFree(envhp, OCI_HTYPE_ENV);
+        OCIHandleFree(srvhp, OCI_HTYPE_SERVER);
+        OCIHandleFree(svchp, OCI_HTYPE_SVCCTX);
+        OCIHandleFree(usrhp, OCI_HTYPE_SESSION);
+        OCIHandleFree(errhp, OCI_HTYPE_ERROR);
+        printf("Exiting...\n");
+        return 0;
+    }
+
+
+
+
     // Execute SELECT statement
     // printf("Preparing SELECT statement...\n");
     status = OCIHandleAlloc(envhp, (void **)&stmthp, OCI_HTYPE_STMT, 0, NULL);
-    if (status != OCI_SUCCESS) {
+    if(status != OCI_SUCCESS) {
         print_oci_error(errhp);
         return 1;
     }
-    status = OCIStmtPrepare(stmthp, errhp, (text *)"SELECT * FROM test", strlen("SELECT * FROM test"), OCI_NTV_SYNTAX, OCI_DEFAULT);
-    if (status != OCI_SUCCESS) {
+    status = OCIStmtPrepare(stmthp, errhp, (text *)sql_statement, strlen(sql_statement), OCI_NTV_SYNTAX, OCI_DEFAULT);
+    if(status != OCI_SUCCESS) {
         print_oci_error(errhp);
         return 1;
     }
@@ -129,7 +164,7 @@ int main() {
     
     // Execute the statement and fetch rows
     status = OCIStmtExecute(svchp, stmthp, errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
-    if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+    if(status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
         print_oci_error(errhp);
         return 1;
     }
@@ -137,11 +172,11 @@ int main() {
     // Print results
     printf("ID\tName\n");
     printf("--------\n");
-    while (1) {
+    while(1) {
         status = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
-        if (status == OCI_NO_DATA) {
+        if(status == OCI_NO_DATA) {
             break;
-        } else if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+        } else if(status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
             print_oci_error(errhp);
             return 1;
         }
@@ -171,7 +206,22 @@ void print_oci_error(OCIError *errhp) {
     printf("Error %d: %s\n", errcode, errbuf);
 }
 
-
-// gcc -o connect connect.c -I../instantclient/sdk/include -L../instantclient -lclntsh
-// instant client is in ../instantclient
-// wallet is in ../wallet
+int read_key_file(char *username, char *password, char *wallet_pw) {
+    FILE *key_file = fopen("../key.txt", "r");
+    if(!key_file) {
+        printf("Error opening key file.\n");
+        return 1;
+    }
+    char line[256];
+    while(fgets(line, sizeof(line), key_file)) {
+        if(strncmp(line, "username", 8) == 0) {
+            sscanf(line, "username%*[ ]=%*[ ]%s", username);
+        } else if(strncmp(line, "password", 8) == 0) {
+            sscanf(line, "password%*[ ]=%*[ ]%s", password);
+        } else if(strncmp(line, "wallet_password", 15) == 0) {
+            sscanf(line, "wallet_password%*[ ]=%*[ ]%s", wallet_pw);
+        }
+    }
+    fclose(key_file);
+    return 0;
+}
