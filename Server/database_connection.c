@@ -54,7 +54,7 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
     // Execute the statement
     status = OCIStmtExecute(svchp, stmthp, errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
     if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
-        printf("Error executing SQL statement.\n");
+        printf("Error executing SQL statement.\n --> OCI_SUCCESS: %d\n --> OCI_SUCCESS_WITH_INFO: %d\n", OCI_SUCCESS, OCI_SUCCESS_WITH_INFO);
         print_oci_error(errhp);
         return;
     }
@@ -112,6 +112,40 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
             return;
         }
     }
+
+    // Print column names
+    // Below gets Column Names and prints them
+    OCIParam *paramhp;
+    ub4 num_cols;
+    status = OCIAttrGet(stmthp, OCI_HTYPE_STMT, &num_cols, 0, OCI_ATTR_PARAM_COUNT, errhp);
+    if (status != OCI_SUCCESS) {
+        printf("Error getting column count.\n");
+        print_oci_error(errhp);
+        return;
+    }
+
+    printf("Column Names:\n");
+    for (ub4 i = 1; i <= num_cols; ++i) {
+        status = OCIParamGet(stmthp, OCI_HTYPE_STMT, errhp, (void **)&paramhp, i);
+        if (status != OCI_SUCCESS) {
+            printf("Error getting column parameter.\n");
+            print_oci_error(errhp);
+            return;
+        }
+
+        text *column_name;
+        ub4 column_name_length;
+        status = OCIAttrGet(paramhp, OCI_DTYPE_PARAM, &column_name, &column_name_length, OCI_ATTR_NAME, errhp);
+        if (status != OCI_SUCCESS) {
+            printf("Error getting column name.\n");
+            print_oci_error(errhp);
+            return;
+        }
+
+        printf("%.*s\t", column_name_length, column_name);
+    }
+
+
     // Allocate memory for column values and lengths
     char** column_values = malloc(column_count * sizeof(char*));
     ub2* column_lengths = malloc(column_count * sizeof(ub2));
@@ -129,45 +163,164 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
         }
     }
 
-    // Fetch and store rows in an array
+//     // // Fetch and store rows in an array
     ub4 max_rows = 100; // Maximum number of rows to store
     ub4 row_count = 0;
     char*** rows = malloc(max_rows * sizeof(char**));
-    while (1) {
+//     // while (1) {
+//     //     status = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
+//     //     if (status == OCI_NO_DATA) {
+//     //         printf("\nNo data found.\n");
+//     //         break;
+//     //     } else if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+//     //         print_oci_error(errhp);
+//     //         goto cleanup;
+//     //     }
+
+//     //     // Store the row in the rows array
+//     //     char** row = malloc(column_count * sizeof(char*));
+//     //     for (ub4 i = 0; i < column_count; ++i) {
+//     //         row[i] = malloc((data_lengths[i] + 1) * sizeof(char)); // +1 for null terminator
+//     //         memset(row[i], 0, (data_lengths[i] + 1) * sizeof(char)); // Ensure the string is null-terminated
+//     //         strncpy(row[i], column_values[i], data_lengths[i]); // Copy the value to the row array
+//     //     }
+//     //     rows[row_count] = row;
+//     //     ++row_count;
+
+//     //     if (row_count == max_rows) {
+//     //         // Resize the rows array if needed
+//     //         max_rows *= 2;
+//     //         rows = realloc(rows, max_rows * sizeof(char**));
+//     //     }
+
+//     //     // // print rows
+//     //     // for (ub4 i = 0; i < row_count; ++i) {
+//     //     //     printf("xxRow %d:\n", i + 1);
+//     //     //     for (ub4 j = 0; j < column_count; ++j) {
+//     //     //         printf("%s\t", rows[i][j]);
+//     //     //     }
+//     //     //     printf("\n");
+//     //     // }
+//     // }
+
+//     // Print the column names
+//     // printf("Column Names:\n");
+//     // for (ub4 i = 0; i < column_count; ++i) {
+//     //     printf("%s\t", column_names[i]);
+//     // }
+//     printf("\n");
+
+//     // Print the stored rows
+//     printf("Results - \n");
+//     for (ub4 i = 0; i < row_count; ++i) {
+//         printf("Row %d:\n", i + 1);
+//         for (ub4 j = 0; j < column_count; ++j) {
+//             printf("%s\t", rows[i][j]);
+//         }
+//         printf("\n");
+//     }
+
+
+//     // Define output variables
+//     ub4 id;
+//     text name[20];
+//     OCIDefineByPos(stmthp, &defnp, errhp, 1, &id, sizeof(id), SQLT_INT, 0, 0, 0, OCI_DEFAULT);
+//     OCIDefineByPos(stmthp, &defnp, errhp, 2, &name, sizeof(name), SQLT_STR, 0, 0, 0, OCI_DEFAULT);
+
+//     // Execute the statement and fetch rows
+//     status = OCIStmtExecute(svchp, stmthp, errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
+//     if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+//         printf("Error executing SQL statement.\n");
+//         print_oci_error(errhp);
+//         clean_up(usrhp, svchp, srvhp, errhp, envhp);
+//         return;
+//     }
+
+//     // Print results
+//     printf("ID\tName\n");
+//     printf("--------\n");
+//     while(1) {
+//         status = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
+//         if(status == OCI_NO_DATA) {
+//             printf("no data found\n");
+//             break;
+//         } else if(status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+//             print_oci_error(errhp);
+//             return;
+//         }
+//         printf("preparing to print results\n");
+//         printf("%d\t%s\n", id, name);
+//     }
+
+
+
+
+//     // printf("\nResult:\n");
+//     // while (1) {
+//     //     status = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
+//     //     if (status == OCI_NO_DATA) {
+//     //         break;
+//     //     } else if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+//     //         print_oci_error(errhp);
+//     //         goto cleanup;
+//     //     }
+
+//     //     for (ub4 i = 0; i < column_count; ++i) {
+//     //         printf("%.*s\t", column_lengths[i], column_values[i]);
+//     //     }
+//     //     printf("\n");
+//     // }
+
+
+//     // Print results
+//     // ub4 id;
+//     // text name[20];
+//     // printf("ID\tName\n");
+//     // printf("--------\n");
+//     // while(1) {
+//     //     status = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
+//     //     if(status == OCI_NO_DATA) {
+//     //         break;
+//     //     } else if(status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+//     //         print_oci_error(errhp);
+//     //         return;
+//     //     }
+
+//     //     printf("%d\t%s\n", id, name);
+//     // }
+
+    // Define output variables
+    ub4 id;
+    text name[20];
+    OCIDefineByPos(stmthp, &defnp, errhp, 1, &id, sizeof(id), SQLT_INT, 0, 0, 0, OCI_DEFAULT);
+    OCIDefineByPos(stmthp, &defnp, errhp, 2, &name, sizeof(name), SQLT_STR, 0, 0, 0, OCI_DEFAULT);
+
+    // Execute the statement and fetch rows
+    status = OCIStmtExecute(svchp, stmthp, errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
+    if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+        printf("Error executing SQL statement.\n --> OCI_SUCCESS: %d\n --> OCI_SUCCESS_WITH_INFO: %d\n", OCI_SUCCESS, OCI_SUCCESS_WITH_INFO);
+        print_oci_error(errhp);
+        clean_up(usrhp, svchp, srvhp, errhp, envhp);
+        return;
+    }
+
+    // Print results
+    // printf("ID\tName\n");
+    printf("\n--------\n");
+    while(1) {
         status = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
-        if (status == OCI_NO_DATA) {
+        if(status == OCI_NO_DATA) {
+            printf("no data found\n");
             break;
-        } else if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+        } else if(status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+            printf("error fetching data\n");
             print_oci_error(errhp);
-            goto cleanup;
+            return;
         }
 
-        // Store the row in the rows array
-        char** row = malloc(column_count * sizeof(char*));
-        for (ub4 i = 0; i < column_count; ++i) {
-            row[i] = malloc((column_lengths[i] + 1) * sizeof(char)); // +1 for null terminator
-            strncpy(row[i], column_values[i], column_lengths[i]);
-            row[i][column_lengths[i]] = '\0'; // Null-terminate the string
-        }
-        rows[row_count] = row;
-        ++row_count;
-
-        if (row_count == max_rows) {
-            // Resize the rows array if needed
-            max_rows *= 2;
-            rows = realloc(rows, max_rows * sizeof(char**));
-        }
+        printf("%d\t%s\n", id, name);
     }
 
-    // Print the stored rows
-    printf("Result:\n");
-    for (ub4 i = 0; i < row_count; ++i) {
-        printf("Row %d:\n", i + 1);
-        for (ub4 j = 0; j < column_count; ++j) {
-            printf("%s\t", rows[i][j]);
-        }
-        printf("\n");
-    }
 
 cleanup:
     // Free dynamically allocated memory for rows
@@ -190,6 +343,8 @@ cleanup:
     if (stmthp != NULL) {
         OCIHandleFree(stmthp, OCI_HTYPE_STMT);
     }
+
+
 }
 
 

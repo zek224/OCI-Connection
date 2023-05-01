@@ -179,7 +179,7 @@ int main() {
             send(new_socket, html_page, strlen(html_page), 0);
         } else if (strncmp(buffer, "POST", 4) == 0) {
             handle_post_request(buffer, post_data);
-            printf("POST data: %s\n", post_data);
+            // printf("POST data: %s\n", post_data);
             memset(post_data, 0, BUFFER_SIZE); // Clear the post_data buffer
             //m return a message to the socket
             const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 20\r\n\r\nRecieved by Server. \n";
