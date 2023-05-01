@@ -20,6 +20,8 @@
 #define BUFFER_SIZE 1024
 
 volatile sig_atomic_t stop = 0;
+
+// OCI Variables
 OCIEnv *envhp;
 OCIServer *srvhp;
 OCISession *usrhp;
@@ -103,9 +105,6 @@ int main() {
     char post_data[BUFFER_SIZE] = {0};
     char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 24\r\n\r\nHello from the C server!\n";
 
-    // OCI Variables
-
-
     // Initialize the OCI environment
     if (initialize(&envhp, &srvhp, &usrhp, &svchp, &errhp, &status) != 0) {
         printf("Error initializing OCI environment.\n");
@@ -154,6 +153,7 @@ int main() {
     signal(SIGINT, signal_handler);
 
     // Register the signal handler for SIGINT using sigaction
+    // Catch Ctrl+C
     struct sigaction sa;
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);

@@ -39,7 +39,7 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
     OCIStmt *stmthp;
     OCIDefine *defnp;
 
-    // Execute SELECT statement
+    // Execute statement
     status = OCIHandleAlloc(envhp, (void **)&stmthp, OCI_HTYPE_STMT, 0, NULL);
     if (status != OCI_SUCCESS) {
         print_oci_error(errhp);
@@ -51,38 +51,197 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
         return;
     }
 
-    // Define output variables
-    ub4 id;
-    text name[20];
-    OCIDefineByPos(stmthp, &defnp, errhp, 1, &id, sizeof(id), SQLT_INT, 0, 0, 0, OCI_DEFAULT);
-    OCIDefineByPos(stmthp, &defnp, errhp, 2, &name, sizeof(name), SQLT_STR, 0, 0, 0, OCI_DEFAULT);
-
-    // Execute the statement and fetch rows
+    // Execute the statement
     status = OCIStmtExecute(svchp, stmthp, errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
     if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
         printf("Error executing SQL statement.\n");
         print_oci_error(errhp);
-        clean_up(usrhp, svchp, srvhp, errhp, envhp);
         return;
     }
 
-    // Print results
-    printf("ID\tName\n");
-    printf("--------\n");
-    while(1) {
-        status = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
-        if(status == OCI_NO_DATA) {
-            break;
-        } else if(status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+    // Get column count
+    ub4 column_count;
+    status = OCIAttrGet(stmthp, OCI_HTYPE_STMT, &column_count, 0, OCI_ATTR_PARAM_COUNT, errhp);
+    if (status != OCI_SUCCESS) {
+        printf("Error getting column count.\n");
+        print_oci_error(errhp);
+        return;
+    }
+
+    // Define output variables
+    OCIDefine *defines[column_count];
+    ub2 data_types[column_count];
+    ub2 data_sizes[column_count];
+    ub2 data_lengths[column_count];
+    char column_names[column_count][30];
+
+    for (ub4 i = 0; i < column_count; ++i) {
+        status = OCIParamGet(stmthp, OCI_HTYPE_STMT, errhp, (dvoid **)&defines[i], i + 1);
+        if (status != OCI_SUCCESS) {
+            printf("Error getting column parameter.\n");
             print_oci_error(errhp);
             return;
         }
 
-        printf("%d\t%s\n", id, name);
+        status = OCIAttrGet(defines[i], OCI_DTYPE_PARAM, &data_types[i], 0, OCI_ATTR_DATA_TYPE, errhp);
+        if (status != OCI_SUCCESS) {
+            printf("Error getting column data type.\n");
+            print_oci_error(errhp);
+            return;
+        }
+
+        status = OCIAttrGet(defines[i], OCI_DTYPE_PARAM, &data_sizes[i], 0, OCI_ATTR_DATA_SIZE, errhp);
+        if (status != OCI_SUCCESS) {
+            printf("Error getting column data size.\n");
+            print_oci_error(errhp);
+            return;
+        }
+
+        ub4 name_length;
+        status = OCIAttrGet(defines[i], OCI_DTYPE_PARAM, &name_length, 0, OCI_ATTR_NAME, errhp);
+        if (status != OCI_SUCCESS) {
+            printf("Error getting column name length.\n");
+            print_oci_error(errhp);
+            return;
+        }
+
+        status = OCIAttrGet(defines[i], OCI_DTYPE_PARAM, column_names[i], &name_length, OCI_ATTR_NAME, errhp);
+        if (status != OCI_SUCCESS) {
+            printf("Error getting column name.\n");
+            print_oci_error(errhp);
+            return;
+        }
+    }
+    // Allocate memory for column values and lengths
+    char** column_values = malloc(column_count * sizeof(char*));
+    ub2* column_lengths = malloc(column_count * sizeof(ub2));
+
+    // Define output variables and allocate memory for each column value
+    for (ub4 i = 0; i < column_count; ++i) {
+        column_values[i] = malloc((data_sizes[i] + 1) * sizeof(char)); // +1 for null terminator
+        memset(column_values[i], 0, (data_sizes[i] + 1) * sizeof(char)); // Ensure the string is null-terminated
+
+        status = OCIDefineByPos(stmthp, &defines[i], errhp, i + 1, column_values[i], data_sizes[i] + 1, SQLT_STR, &column_lengths[i], 0, 0, OCI_DEFAULT);
+        if (status != OCI_SUCCESS) {
+            printf("Error defining column variable for column %d.\n", i + 1);
+            print_oci_error(errhp);
+            goto cleanup;
+        }
     }
 
-    OCIHandleFree(stmthp, OCI_HTYPE_STMT);
+    // Fetch and store rows in an array
+    ub4 max_rows = 100; // Maximum number of rows to store
+    ub4 row_count = 0;
+    char*** rows = malloc(max_rows * sizeof(char**));
+    while (1) {
+        status = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
+        if (status == OCI_NO_DATA) {
+            break;
+        } else if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+            print_oci_error(errhp);
+            goto cleanup;
+        }
+
+        // Store the row in the rows array
+        char** row = malloc(column_count * sizeof(char*));
+        for (ub4 i = 0; i < column_count; ++i) {
+            row[i] = malloc((column_lengths[i] + 1) * sizeof(char)); // +1 for null terminator
+            strncpy(row[i], column_values[i], column_lengths[i]);
+            row[i][column_lengths[i]] = '\0'; // Null-terminate the string
+        }
+        rows[row_count] = row;
+        ++row_count;
+
+        if (row_count == max_rows) {
+            // Resize the rows array if needed
+            max_rows *= 2;
+            rows = realloc(rows, max_rows * sizeof(char**));
+        }
+    }
+
+    // Print the stored rows
+    printf("Result:\n");
+    for (ub4 i = 0; i < row_count; ++i) {
+        printf("Row %d:\n", i + 1);
+        for (ub4 j = 0; j < column_count; ++j) {
+            printf("%s\t", rows[i][j]);
+        }
+        printf("\n");
+    }
+
+cleanup:
+    // Free dynamically allocated memory for rows
+    for (ub4 i = 0; i < row_count; ++i) {
+        for (ub4 j = 0; j < column_count; ++j) {
+            free(rows[i][j]);
+        }
+        free(rows[i]);
+    }
+    free(rows);
+
+    // Free dynamically allocated memory for column values
+    for (ub4 i = 0; i < column_count; ++i) {
+        free(column_values[i]);
+    }
+    free(column_values);
+    free(column_lengths);
+
+    // Free dynamically allocated memory for the statement
+    if (stmthp != NULL) {
+        OCIHandleFree(stmthp, OCI_HTYPE_STMT);
+    }
 }
+
+
+
+
+        // // Print header
+        // printf("Result:\n");
+        // for (ub4 i = 0; i < column_count; ++i) {
+        //     printf("%-30s", column_names[i]);
+        // }
+        // printf("\n");
+
+        // // Fetch and print rows
+        // ub4 row_count = 0;
+        // while (1) {
+        //     status = OCIStmtFetch(stmthp, errhp, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
+        //     if (status == OCI_NO_DATA) {
+        //         break;
+        //     } else if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+        //         print_oci_error(errhp);
+        //         return;
+        //     }
+
+        //     ++row_count;
+        //     printf("Row %d:\n", row_count);
+        //     for (ub4 i = 0; i < column_count; ++i) {
+        //         if (data_types[i] == SQLT_INT) {
+        //             int value;
+        //             status = OCIDefineByPos(stmthp, &defnp, errhp, i + 1, &value, sizeof(value), SQLT_INT, 0, 0, 0, OCI_DEFAULT);
+        //             if (status != OCI_SUCCESS) {
+        //                 printf("Error defining column variable.\n");
+        //                 print_oci_error(errhp);
+        //                 return;
+        //             }
+        //             printf("%-30d", value);
+        //         } else if (data_types[i] == SQLT_STR) {
+        //             char value[data_sizes[i]];
+        //             status = OCIDefineByPos(stmthp, &defnp, errhp, i + 1, value, data_sizes[i], SQLT_STR, 0, 0, 0, OCI_DEFAULT);
+        //             if (status != OCI_SUCCESS) {
+        //                 printf("Error defining column variable.\n");
+        //                 print_oci_error(errhp);
+        //                 return;
+        //             }
+        //             printf("%-30s", value);
+        //         } else {
+        //             printf("%-30s", "N/A");
+        //         }
+        //     }
+        //     printf("\n");
+        // }
+
+        // OCIHandleFree(stmthp, OCI_HTYPE_STMT);
 
 
 
