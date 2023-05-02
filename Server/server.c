@@ -183,7 +183,7 @@ int main() {
             // printf("POST data: %s\n", post_data);
             memset(post_data, 0, BUFFER_SIZE); // Clear the post_data buffer
             //m return a message to the socket
-            const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 20\r\n\r\nRecieved by Server. \n";
+            const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 21\r\n\r\nRecieved by Server. \n";
             send(new_socket, response, strlen(response), 0);
         } else {
             // Send an error message
