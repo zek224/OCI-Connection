@@ -225,6 +225,15 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
 
         // END OF NON SELECT STATEMENT SECTION
         // ===============================
+
+        // Commit the transaction
+        status = OCITransCommit(svchp, errhp, OCI_DEFAULT);
+        if (status != OCI_SUCCESS) {
+            printf("Error committing transaction.\n");
+            print_oci_error(errhp);
+            return;
+        }
+        printf("Transaction committed successfully.\n");
     }
 
 
