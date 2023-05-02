@@ -165,6 +165,7 @@ int main() {
 
     // Accept connections from clients
     while (!stop) {
+        printf("\nWaiting for a connection...\n");
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
