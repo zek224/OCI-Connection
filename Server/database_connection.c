@@ -1,6 +1,3 @@
-// gcc -o database_connection database_connection.c -I../instantclient/sdk/include -L../instantclient -lclntsh -Wl,-rpath=../instantclient
-// export LD_LIBRARY_PATH="/mnt/c/Users/Zeeshan Khan/Desktop/p/oracle/OCI-Connection/instantclient":$LD_LIBRARY_PATH 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -223,9 +220,6 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
         }
         printf("SQL statement executed successfully.\n");
 
-        // END OF NON SELECT STATEMENT SECTION
-        // ===============================
-
         // Commit the transaction
         status = OCITransCommit(svchp, errhp, OCI_DEFAULT);
         if (status != OCI_SUCCESS) {
@@ -234,6 +228,8 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
             return;
         }
         printf("Transaction committed successfully.\n");
+        // END OF NON SELECT STATEMENT SECTION
+        // ===============================
     }
 
 

@@ -1,10 +1,3 @@
-//gcc -o database_connection database_connection.c -I../instantclient/sdk/include -L../instantclient -lclntsh -Wl,-rpath=../instantclient
-
-// gcc -o server server.c database_connection.c -I../instantclient/sdk/include -L../instantclient -lclntsh -Wl,-rpath=../instantclient
-
-
-
-
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <signal.h>
