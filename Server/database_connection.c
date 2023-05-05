@@ -4,6 +4,34 @@
 #include <strings.h>
 #include "database_connection.h"
 
+typedef struct {
+    char *buffer;
+    size_t length;
+    size_t capacity;
+} string_buffer;
+
+void string_buffer_init(string_buffer *sb) {
+    sb->length = 0;
+    sb->capacity = 128;
+    sb->buffer = malloc(sb->capacity);
+    sb->buffer[0] = '\0';
+}
+
+void string_buffer_append(string_buffer *sb, const char *str) {
+    size_t len = strlen(str);
+    while (sb->length + len + 1 > sb->capacity) {
+        sb->capacity *= 2;
+        sb->buffer = realloc(sb->buffer, sb->capacity);
+    }
+    memcpy(sb->buffer + sb->length, str, len);
+    sb->length += len;
+    sb->buffer[sb->length] = '\0';
+}
+
+void string_buffer_free(string_buffer *sb) {
+    free(sb->buffer);
+}
+
 
 int initialize(OCIEnv **envhp, OCIServer **srvhp, OCISession **usrhp, OCISvcCtx **svchp, OCIError **errhp, sword *status) {
     // const char *sql_statement = argv[1];
@@ -33,9 +61,14 @@ int initialize(OCIEnv **envhp, OCIServer **srvhp, OCISession **usrhp, OCISvcCtx 
     return 0;
 }
 
-void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *errhp, OCIServer *srvhp, OCISession *usrhp, const char *sql_query) {
+char* execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *errhp, OCIServer *srvhp, OCISession *usrhp, const char *sql_query) {
     OCIStmt *stmthp;
     OCIDefine *defnp;
+
+    // String buffer
+    string_buffer result;
+    string_buffer_init(&result);
+
 
     // Check if the query is a SELECT statement
     int is_select = (strncasecmp(sql_query, "SELECT", 6) == 0);
@@ -46,12 +79,12 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
     status = OCIHandleAlloc(envhp, (void **)&stmthp, OCI_HTYPE_STMT, 0, NULL);
     if (status != OCI_SUCCESS) {
         print_oci_error(errhp);
-        return;
+        return NULL;
     }
     status = OCIStmtPrepare(stmthp, errhp, (text *)sql_query, strlen(sql_query), OCI_NTV_SYNTAX, OCI_DEFAULT);
     if (status != OCI_SUCCESS) {
         print_oci_error(errhp);
-        return;
+        return NULL;
     }
     // End of Prepare Statement 
     // ===============================
@@ -69,7 +102,7 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
         if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
             printf("Error executing SQL statement.\n --> OCI_SUCCESS: %d\n --> OCI_SUCCESS_WITH_INFO: %d\n", OCI_SUCCESS, OCI_SUCCESS_WITH_INFO);
             print_oci_error(errhp);
-            return;
+            return NULL;
         }
 
         // ===============================
@@ -79,7 +112,7 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
         if (status != OCI_SUCCESS) {
             printf("Error getting column count.\n");
             print_oci_error(errhp);
-            return;
+            return NULL;
         }
 
         // Define output variables
@@ -98,21 +131,21 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
             if (status != OCI_SUCCESS) {
                 printf("Error getting column parameter.\n");
                 print_oci_error(errhp);
-                return;
+                return NULL;
             }
 
             status = OCIAttrGet(defines[i], OCI_DTYPE_PARAM, &data_types[i], 0, OCI_ATTR_DATA_TYPE, errhp);
             if (status != OCI_SUCCESS) {
                 printf("Error getting column data type.\n");
                 print_oci_error(errhp);
-                return;
+                return NULL;
             }
 
             status = OCIAttrGet(defines[i], OCI_DTYPE_PARAM, &data_sizes[i], 0, OCI_ATTR_DATA_SIZE, errhp);
             if (status != OCI_SUCCESS) {
                 printf("Error getting column data size.\n");
                 print_oci_error(errhp);
-                return;
+                return NULL;
             }
 
             ub4 name_length;
@@ -120,14 +153,14 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
             if (status != OCI_SUCCESS) {
                 printf("Error getting column name length.\n");
                 print_oci_error(errhp);
-                return;
+                return NULL;
             }
 
             status = OCIAttrGet(defines[i], OCI_DTYPE_PARAM, column_names[i], &name_length, OCI_ATTR_NAME, errhp);
             if (status != OCI_SUCCESS) {
                 printf("Error getting column name.\n");
                 print_oci_error(errhp);
-                return;
+                return NULL;
             }
         }
 
@@ -138,7 +171,7 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
         if (status != OCI_SUCCESS) {
             printf("Error getting column count.\n");
             print_oci_error(errhp);
-            return;
+            return NULL;
         }
 
         // Print column names
@@ -149,7 +182,7 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
             if (status != OCI_SUCCESS) {
                 printf("Error getting column parameter.\n");
                 print_oci_error(errhp);
-                return;
+                return NULL;
             }
 
             text *column_name;
@@ -158,11 +191,17 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
             if (status != OCI_SUCCESS) {
                 printf("Error getting column name.\n");
                 print_oci_error(errhp);
-                return;
+                return NULL;
             }
 
             printf("%-*s", column_width, column_name);
+
+            // fill string buffer
+            char column_buf[column_width + 1];
+            snprintf(column_buf, sizeof(column_buf), "%-*s", column_width, column_name);
+            string_buffer_append(&result, column_buf);
         }
+        string_buffer_append(&result, "\n");
         // END OF COLUMN NAMES SECTION
         // ===============================
 
@@ -198,8 +237,14 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
 
             for (ub4 i = 0; i < column_count; ++i) {
                 printf("%-*s", column_width, column_values[i]);
+                // fill string buffer
+                char value_buf[column_width + 1];
+                snprintf(value_buf, sizeof(value_buf), "%-*s", column_width, column_values[i]);
+                string_buffer_append(&result, value_buf);
+                // string_buffer_append(&result, "\n");
             }
             printf("\n");
+            string_buffer_append(&result, "\n");
         }
         // END OF COLUMN VALUES SECTION
         // ===============================
@@ -216,7 +261,7 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
         if (status != OCI_SUCCESS) {
             printf("(not a select statement) Error executing SQL statement.\n --> OCI_SUCCESS: %d\n --> OCI_SUCCESS_WITH_INFO: %d\n", OCI_SUCCESS, OCI_SUCCESS_WITH_INFO);
             print_oci_error(errhp);
-            return;
+            return NULL;
         }
         printf("SQL statement executed successfully.\n");
 
@@ -225,13 +270,21 @@ void execute_sql_query(sword status, OCIEnv *envhp, OCISvcCtx *svchp, OCIError *
         if (status != OCI_SUCCESS) {
             printf("Error committing transaction.\n");
             print_oci_error(errhp);
-            return;
+            return NULL;
         }
         printf("Transaction committed successfully.\n");
         // END OF NON SELECT STATEMENT SECTION
         // ===============================
     }
 
+    // string_buffer_append(&result, '\0');
+    char *result_copy = (char *)malloc((result.length + 1) * sizeof(char));
+    memcpy(result_copy, result.buffer, result.length);
+    result_copy[result.length] = '\0';
+    free(result.buffer);
+    return result_copy;
+
+    // return result.buffer;
 
 // ========================
 // Clean up code

@@ -78,14 +78,17 @@ const char *html_page = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
                         "</html>";
 
 
-void handle_post_request(char *request, char *post_data) {
+char* handle_post_request(char *request, char *post_data) {
     char *post_data_start = strstr(request, "\r\n\r\n");
     if (post_data_start != NULL) {
         strcpy(post_data, post_data_start + 4); // Skip the "\r\n\r\n" delimiter
     } else {
         post_data[0] = '\0';
     }
-    execute_sql_query(status, envhp, svchp, errhp, srvhp, usrhp, post_data);
+    char *result = execute_sql_query(status, envhp, svchp, errhp, srvhp, usrhp, post_data);
+    // printf("Result from server.c file: %s\n", result);
+    return result;
+
 }
 
 int main() {
@@ -111,9 +114,6 @@ int main() {
     // execute sql statement
     printf("Starting Server...\n");
     // sleep(5);
-
-
-
 
     // Create a socket
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
@@ -172,12 +172,25 @@ int main() {
             // Serve the HTML page
             send(new_socket, html_page, strlen(html_page), 0);
         } else if (strncmp(buffer, "POST", 4) == 0) {
-            handle_post_request(buffer, post_data);
-            // printf("POST data: %s\n", post_data);
+            char *result = handle_post_request(buffer, post_data);
             memset(post_data, 0, BUFFER_SIZE); // Clear the post_data buffer
-            //m return a message to the socket
-            const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 21\r\n\r\nRecieved by Server. \n";
-            send(new_socket, response, strlen(response), 0);
+
+            // if result character array is empty
+            if (result == NULL || strlen(result) == 0) {
+                // send an error message
+                char *error_message = "HTTP/1.1 200 Recieved by Server.\r\nContent-Type: text/plain\r\nContent-Length: 20\r\n\r\nRecieved by Server.\n";
+                send(new_socket, error_message, strlen(error_message), 0);
+            } else {
+                // send the result
+                char response_header[BUFFER_SIZE];
+                sprintf(response_header, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\n\r\n", strlen(result));
+                send(new_socket, response_header, strlen(response_header), 0);
+                send(new_socket, result, strlen(result), 0);
+            }
+
+            // Free the result after sending it
+            free(result);
+
         } else {
             // Send an error message
             char *error_message = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 15\r\n\r\nBad Request\n";
